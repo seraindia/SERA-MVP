@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "extra": {
+      "eas": {
+        "projectId": "9645f742-030c-469b-9250-9724fc1f36ce"
+      }
+    },
     "android": {
       "package": "com.seraindia.mvp",
       "versionCode": 1
