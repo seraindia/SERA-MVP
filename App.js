@@ -1,866 +1,909 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  SafeAreaView,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   Alert,
   Image,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://ykltmnvxxwwtinugotxp.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_M_UUA7yqv8kKfc9WwTl5aA_Fxo_HIlN";
+
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_M_UUA7yqv8kKfc9WwTl5aA_Fxo_HIlN";
 
 const supabase = createClient(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY
 );
 
-const GREEN = "#20D46B";
-const DARK = "#073B3A";
-const BG = "#F7F9F8";
-const TEXT = "#102323";
-const MUTED = "#6B7777";
-
 const SERVICES = [
   {
-    id: "bike",
+    name: "Bike Taxi",
     icon: "🏍️",
-    title: "Bike Taxi",
-    subtitle: "Fast local rides",
+    description: "Quick local rides",
   },
   {
-    id: "parcel",
+    name: "Parcel",
     icon: "📦",
-    title: "Parcel",
-    subtitle: "Pickup & delivery",
+    description: "Send a parcel locally",
   },
   {
-    id: "buy",
+    name: "Buy & Bring",
     icon: "🛍️",
-    title: "Buy & Bring",
-    subtitle: "We'll buy & bring it",
+    description: "We'll buy and bring it",
   },
   {
-    id: "print",
+    name: "Print & Xerox",
     icon: "📄",
-    title: "Print & Xerox",
-    subtitle: "Print and deliver",
+    description: "Print and deliver",
   },
   {
-    id: "task",
+    name: "General Task",
     icon: "🏃",
-    title: "General Task",
-    subtitle: "Local help & errands",
+    description: "Everyday local tasks",
   },
   {
-    id: "care",
+    name: "SERA Care",
     icon: "❤️",
-    title: "SERA Care",
-    subtitle: "When you can't be there",
+    description: "When you can't be there",
   },
 ];
 
 export default function App() {
   const [screen, setScreen] = useState("login");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+
   const [selectedService, setSelectedService] = useState(null);
 
-  async function sendOTP() {
-    const cleanPhone = phone.replace(/\D/g, "");
+  const [pickup, setPickup] = useState("");
+  const [destination, setDestination] = useState("");
 
-    if (cleanPhone.length !== 10) {
+  const [personName, setPersonName] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [careMinutes, setCareMinutes] = useState("180");
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+
+      if (data.session?.user) {
+        setUser(data.session.user);
+        setScreen("home");
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function login() {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
       Alert.alert(
-        "Check your number",
-        "Please enter a valid 10-digit Indian mobile number."
+        "Login",
+        "Enter your test email and password."
       );
       return;
     }
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: `+91${cleanPhone}`,
-    });
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password,
+      });
 
     setLoading(false);
 
     if (error) {
-      Alert.alert("OTP", error.message);
+      Alert.alert("Login failed", error.message);
       return;
     }
 
-    setScreen("otp");
+    setUser(data.user);
+    setScreen("home");
   }
 
-  async function verifyOTP() {
-    if (otp.length !== 6) {
-      Alert.alert("Check OTP", "Enter the 6-digit OTP.");
+  async function logout() {
+    await supabase.auth.signOut();
+
+    setUser(null);
+    setScreen("login");
+
+    setEmail("");
+    setPassword("");
+  }
+
+  function openService(service) {
+    setSelectedService(service);
+
+    setPickup("");
+    setDestination("");
+
+    setPersonName("");
+    setPurpose("");
+    setNotes("");
+
+    setCareMinutes("180");
+
+    setScreen("booking");
+  }
+
+  async function createBooking() {
+    if (!user) {
+      Alert.alert(
+        "Login required",
+        "Please log in first."
+      );
+
+      setScreen("login");
+      return;
+    }
+
+    if (!pickup.trim() || !destination.trim()) {
+      Alert.alert(
+        "Missing details",
+        "Enter pickup and destination."
+      );
+
+      return;
+    }
+
+    const isCare =
+      selectedService?.name === "SERA Care";
+
+    if (isCare && !personName.trim()) {
+      Alert.alert(
+        "Missing details",
+        "Enter the name of the person needing care."
+      );
+
       return;
     }
 
     setLoading(true);
 
-    const cleanPhone = phone.replace(/\D/g, "");
+    const minutes = Math.max(
+      30,
+      Number(careMinutes) || 180
+    );
 
-    const { error } = await supabase.auth.verifyOtp({
-      phone: `+91${cleanPhone}`,
-      token: otp,
-      type: "sms",
-    });
+    const careAmount =
+      (minutes / 60) * 150;
 
-    setLoading(false);
+    const serviceType =
+      selectedService?.name || "General Task";
+
+    const { data: booking, error } =
+      await supabase
+        .from("bookings")
+        .insert({
+          customer_id: user.id,
+          service_type: serviceType,
+          status: "requested",
+          pickup_address: pickup.trim(),
+          destination_address: destination.trim(),
+          distance_km: 0,
+          estimated_minutes: isCare
+            ? minutes
+            : 30,
+          total_fare: isCare
+            ? careAmount
+            : 0,
+        })
+        .select()
+        .single();
 
     if (error) {
-      Alert.alert("Verification failed", error.message);
+      setLoading(false);
+
+      Alert.alert(
+        "Booking error",
+        error.message
+      );
+
       return;
     }
 
-    setScreen("home");
+    if (isCare) {
+      const { error: careError } =
+        await supabase
+          .from("care_bookings")
+          .insert({
+            booking_id: booking.id,
+            person_name: personName.trim(),
+            purpose: purpose.trim(),
+            notes: notes.trim(),
+
+            care_started_at: null,
+            care_ended_at: null,
+            care_minutes: 0,
+
+            customer_care_rate: 150,
+            partner_care_rate: 100,
+            travel_rate: 7,
+            completion_bonus: 40,
+
+            care_amount: careAmount,
+            travel_amount: 0,
+            partner_payout: 40,
+          });
+
+      if (careError) {
+        setLoading(false);
+
+        Alert.alert(
+          "Care booking error",
+          careError.message
+        );
+
+        return;
+      }
+    }
+
+    setLoading(false);
+
+    Alert.alert(
+      "Request created",
+      `${serviceType} request created successfully.`,
+      [
+        {
+          text: "OK",
+          onPress: () => setScreen("home"),
+        },
+      ]
+    );
   }
 
-  function selectService(service) {
-    setSelectedService(service);
-    setScreen("booking");
-  }
-
-  function goHome() {
-    setSelectedService(null);
-    setScreen("home");
-  }
-
-  if (screen === "login") {
+  function LoginScreen() {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.loginContainer}>
+      <SafeAreaView style={styles.dark}>
+        <ScrollView
+          contentContainerStyle={styles.login}
+          keyboardShouldPersistTaps="handled"
+        >
           <Image
-            source={require("./assets/sera white logo png.png")}
-            style={styles.loginLogo}
+            source={require(
+              "./assets/sera white logo png.png"
+            )}
+            style={styles.logo}
             resizeMode="contain"
           />
 
-          <View style={styles.logoFallback}>
-            <Text style={styles.logoText}>SERA</Text>
-            <Text style={styles.logoTagline}>
-              PEOPLE • TASKS • CARE
-            </Text>
-          </View>
-
-          <Text style={styles.welcome}>A More Helpful Tomorrow.</Text>
-
-          <Text style={styles.loginTitle}>Welcome to SERA</Text>
-
-          <Text style={styles.loginSubtitle}>
-            Enter your mobile number to continue
+          <Text style={styles.brandWhite}>
+            SERA
           </Text>
 
-          <View style={styles.phoneBox}>
-            <Text style={styles.country}>+91</Text>
-
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
-              placeholder="Mobile number"
-              placeholderTextColor="#9AA5A5"
-              style={styles.phoneInput}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={sendOTP}
-            disabled={loading}
-          >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Sending OTP..." : "Continue"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.terms}>
-            By continuing, you agree to SERA's Terms & Privacy Policy.
+          <Text style={styles.tagWhite}>
+            PEOPLE • TASKS • CARE
           </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
-  if (screen === "otp") {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.otpContainer}>
-          <TouchableOpacity onPress={() => setScreen("onPress={() => setScreen("home")}")}>
-            <Text style={styles.back}>‹ Back</Text>
-          </TouchableOpacity>
+          <Text style={styles.helpful}>
+            A More Helpful Tomorrow
+          </Text>
 
-          <View style={styles.smallLogo}>
-            <Text style={styles.smallLogoText}>SERA</Text>
-          </View>
+          <Text style={styles.loginTitle}>
+            Welcome to SERA
+          </Text>
 
-          <Text style={styles.loginTitle}>Verify your number</Text>
+          <Text style={styles.loginSub}>
+            Development login — phone OTP will
+            be added before launch
+          </Text>
 
-          <Text style={styles.loginSubtitle}>
-            Enter the 6-digit OTP sent to +91 {phone}
+          <Text style={styles.labelWhite}>
+            Test email
           </Text>
 
           <TextInput
-            value={otp}
-            onChangeText={setOtp}
-            keyboardType="number-pad"
-            maxLength={6}
-            placeholder="000000"
-            placeholderTextColor="#9AA5A5"
-            style={styles.otpInput}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            placeholder="Enter your test email"
+            placeholderTextColor="#8C969B"
+            style={styles.darkInput}
           />
 
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={verifyOTP}
+          <Text style={styles.labelWhite}>
+            Password
+          </Text>
+
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="Enter your test password"
+            placeholderTextColor="#8C969B"
+            style={styles.darkInput}
+          />
+
+          <Pressable
+            style={[
+              styles.greenButton,
+              loading && styles.disabledButton,
+            ]}
+            onPress={login}
             disabled={loading}
           >
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Verifying..." : "Verify & Continue"}
+            <Text style={styles.buttonText}>
+              {loading
+                ? "Signing in..."
+                : "Continue"}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity onPress={() => setScreen("home")}
-            <Text style={styles.resend}>Resend OTP</Text>
-          </TouchableOpacity>
-        </View>
+          <Text style={styles.noteDark}>
+            Development mode only. Phone OTP +
+            MSG91 will be connected later.
+          </Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
-  if (screen === "home") {
+  function HomeScreen() {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.light}>
         <ScrollView
-          contentContainerStyle={styles.homeContent}
-          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
         >
-          <View style={styles.header}>
+          <View style={styles.top}>
             <View>
-              <Text style={styles.hello}>Hello 👋</Text>
-              <Text style={styles.headerTitle}>How can SERA help?</Text>
-            </View>
-
-            <View style={styles.profileCircle}>
-              <Text style={styles.profileIcon}>👤</Text>
-            </View>
-          </View>
-
-          <View style={styles.banner}>
-            <View style={styles.bannerText}>
-              <Text style={styles.bannerTitle}>
-                A More Helpful Tomorrow.
+              <Text style={styles.brand}>
+                SERA
               </Text>
 
-              <Text style={styles.bannerSubtitle}>
-                People • Tasks • Care
+              <Text style={styles.tag}>
+                PEOPLE • TASKS • CARE
               </Text>
             </View>
 
-            <Text style={styles.bannerIcon}>✨</Text>
+            <Pressable
+              onPress={logout}
+              style={styles.logout}
+            >
+              <Text style={styles.logoutText}>
+                Logout
+              </Text>
+            </Pressable>
           </View>
 
-          <Text style={styles.sectionTitle}>Services</Text>
+          <View style={styles.hero}>
+            <Text style={styles.helpfulGreen}>
+              A More Helpful Tomorrow
+            </Text>
 
-          <View style={styles.serviceGrid}>
-            {SERVICES.map((service) => (
-              <TouchableOpacity
-                key={service.id}
-                style={styles.serviceCard}
-                onPress={() => selectService(service)}
-                activeOpacity={0.8}
+            <Text style={styles.heroTitle}>
+              What can we help with?
+            </Text>
+
+            <Text style={styles.heroSub}>
+              Everyday tasks, local services and
+              care — all in one place.
+            </Text>
+          </View>
+
+          <Text style={styles.section}>
+            Services
+          </Text>
+
+          <View style={styles.grid}>
+            {SERVICES.map((item) => (
+              <Pressable
+                key={item.name}
+                style={styles.card}
+                onPress={() =>
+                  openService(item)
+                }
               >
-                <View style={styles.serviceIcon}>
-                  <Text style={styles.serviceEmoji}>
-                    {service.icon}
-                  </Text>
-                </View>
-
-                <Text style={styles.serviceTitle}>
-                  {service.title}
+                <Text style={styles.icon}>
+                  {item.icon}
                 </Text>
 
-                <Text style={styles.serviceSubtitle}>
-                  {service.subtitle}
+                <Text style={styles.cardTitle}>
+                  {item.name}
                 </Text>
-              </TouchableOpacity>
+
+                <Text style={styles.cardSub}>
+                  {item.description}
+                </Text>
+              </Pressable>
             ))}
           </View>
 
-          <TouchableOpacity style={styles.careBanner}>
-            <View style={styles.careHeart}>
-              <Text style={styles.careHeartText}>❤️</Text>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.careTitle}>SERA Care</Text>
-              <Text style={styles.careSubtitle}>
-                When you can't be there, we can be there.
-              </Text>
-            </View>
-
-            <Text style={styles.arrow}>›</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.sectionTitle}>Your recent activity</Text>
-
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyTitle}>No recent bookings</Text>
-            <Text style={styles.emptyText}>
-              Your completed and active bookings will appear here.
+          <View style={styles.careBanner}>
+            <Text style={styles.careTitle}>
+              SERA Care
             </Text>
+
+            <Text style={styles.careText}>
+              When you can't be there, we can be
+              there.
+            </Text>
+
+            <Pressable
+              style={styles.whiteButton}
+              onPress={() =>
+                openService({
+                  name: "SERA Care",
+                  icon: "❤️",
+                  description:
+                    "Trusted human companionship",
+                })
+              }
+            >
+              <Text
+                style={styles.whiteButtonText}
+              >
+                Book a Care Partner
+              </Text>
+            </Pressable>
           </View>
+
+          <Text style={styles.footer}>
+            SERA • PEOPLE • TASKS • CARE
+          </Text>
         </ScrollView>
       </SafeAreaView>
     );
+  }
+
+  function BookingScreen() {
+    const isCare =
+      selectedService?.name === "SERA Care";
+
+    const minutes = Math.max(
+      30,
+      Number(careMinutes) || 180
+    );
+
+    const careAmount =
+      (minutes / 60) * 150;
+
+    return (
+      <SafeAreaView style={styles.light}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+        >
+          <View style={styles.header}>
+            <Pressable
+              onPress={() =>
+                setScreen("home")
+              }
+              style={styles.back}
+            >
+              <Text style={styles.backText}>
+                ‹
+              </Text>
+            </Pressable>
+
+            <Text style={styles.headerTitle}>
+              {selectedService?.name}
+            </Text>
+
+            <View
+              style={{
+                width: 42,
+              }}
+            />
+          </View>
+
+          <View
+            style={
+              isCare
+                ? styles.careHero
+                : styles.serviceHero
+            }
+          >
+            <Text style={styles.bigIcon}>
+              {selectedService?.icon}
+            </Text>
+
+            <Text style={styles.heroTitle}>
+              {selectedService?.name}
+            </Text>
+
+            <Text style={styles.heroSub}>
+              {isCare
+                ? "When you can't be there, we can be there."
+                : selectedService?.description}
+            </Text>
+          </View>
+
+          {isCare && (
+            <>
+              <Text style={styles.label}>
+                Person needing assistance
+              </Text>
+
+              <TextInput
+                value={personName}
+                onChangeText={setPersonName}
+                placeholder="Name"
+                placeholderTextColor="#9AA5A9"
+                style={styles.input}
+              />
+            </>
+          )}
+
+          <Text style={styles.label}>
+            {isCare
+              ? "Pickup location"
+              : "Pickup / start"}
+          </Text>
+
+          <TextInput
+            value={pickup}
+            onChangeText={setPickup}
+            placeholder="Enter pickup or start location"
+            placeholderTextColor="#9AA5A9"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>
+            Destination
+          </Text>
+
+          <TextInput
+            value={destination}
+            onChangeText={setDestination}
+            placeholder="Enter destination"
+            placeholderTextColor="#9AA5A9"
+            style={styles.input}
+          />
+
+          {isCare && (
+            <>
+              <Text style={styles.label}>
+                Purpose
+              </Text>
+
+              <TextInput
+                value={purpose}
+                onChangeText={setPurpose}
+                placeholder="Hospital visit, doctor appointment, etc."
+                placeholderTextColor="#9AA5A9"
+                style={styles.input}
+              />
+            </>
+          )}
+
+          <Text style={styles.label}>
+            Notes
+          </Text>
+
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Optional instructions"
+            placeholderTextColor="#9AA5A9"
+            multiline
+            style={[
+              styles.input,
+              styles.notes,
+            ]}
+          />
+
+          {isCare && (
+            <>
+              <Text style={styles.section}>
+                Expected care duration
+              </Text>
+
+              <View
+                style={styles.durationRow}
+              >
+                {[
+                  "60",
+                  "120",
+                  "180",
+                  "240",
+                  "300",
+                ].map((value) => (
+                  <Pressable
+                    key={value}
+                    onPress={() =>
+                      setCareMinutes(value)
+                    }
+                    style={[
+                      styles.duration,
+                      careMinutes === value &&
+                        styles.durationSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.durationText,
+                        careMinutes === value &&
+                          styles.durationTextSelected,
+                      ]}
+                    >
+                      {Number(value) / 60}h
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.label}>
+                Custom minutes
+              </Text>
+
+              <TextInput
+                value={careMinutes}
+                onChangeText={setCareMinutes}
+                keyboardType="number-pad"
+                placeholder="Example: 107"
+                placeholderTextColor="#9AA5A9"
+                style={styles.input}
+              />
+
+              <View style={styles.info}>
+                <Text style={styles.infoTitle}>
+                  Care pricing
+                </Text>
+
+                <Text style={styles.infoText}>
+                  Companion time ₹150/hour,
+                  billed per minute. Travel is
+                  separate at ₹7/km. Minimum
+                  care charge: 30 minutes.
+                </Text>
+              </View>
+
+              <View style={styles.fare}>
+                <Text style={styles.fareTitle}>
+                  Estimated Care
+                </Text>
+
+                <View style={styles.fareRow}>
+                  <Text>
+                    Companion time
+                  </Text>
+
+                  <Text>
+                    ₹{careAmount.toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.fareRow}>
+                  <Text>
+                    Travel
+                  </Text>
+
+                  <Text>
+                    Calculated after trip
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          <Pressable
+            style={[
+              styles.primaryLight,
+              loading &&
+                styles.disabledButton,
+            ]}
+            onPress={createBooking}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading
+                ? "Creating request..."
+                : "Request SERA Partner →"}
+            </Text>
+          </Pressable>
+
+          <Text style={styles.smallNote}>
+            Development build: booking data is
+            saved to Supabase. Maps, matching,
+            payment and SMS will be connected
+            later.
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === "login") {
+    return <LoginScreen />;
   }
 
   if (screen === "booking") {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.bookingContent}>
-          <TouchableOpacity onPress={goHome}>
-            <Text style={styles.back}>‹ Back</Text>
-          </TouchableOpacity>
-
-          <View style={styles.bookingIcon}>
-            <Text style={styles.bookingEmoji}>
-              {selectedService?.icon}
-            </Text>
-          </View>
-
-          <Text style={styles.bookingTitle}>
-            {selectedService?.title}
-          </Text>
-
-          <Text style={styles.bookingSubtitle}>
-            {selectedService?.subtitle}
-          </Text>
-
-          <View style={styles.locationCard}>
-            <View style={styles.locationRow}>
-              <View style={styles.dotGreen} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.locationLabel}>Pickup / Start</Text>
-                <Text style={styles.locationPlaceholder}>
-                  Enter pickup location
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.locationLine} />
-
-            <View style={styles.locationRow}>
-              <View style={styles.dotDark} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.locationLabel}>Destination</Text>
-                <Text style={styles.locationPlaceholder}>
-                  Enter destination
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>Booking details</Text>
-
-          <View style={styles.detailCard}>
-            <Text style={styles.detailText}>
-              📍 Live route & distance
-            </Text>
-
-            <Text style={styles.detailText}>
-              🔔 Partner matching notification
-            </Text>
-
-            <Text style={styles.detailText}>
-              🗺️ Real-time tracking
-            </Text>
-
-            <Text style={styles.detailText}>
-              🔐 OTP verification
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() =>
-              Alert.alert(
-                "Coming next",
-                "Real booking creation will be connected to the SERA backend next."
-              )
-            }
-          >
-            <Text style={styles.primaryButtonText}>
-              Continue
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
+    return <BookingScreen />;
   }
 
-  return null;
+  return <HomeScreen />;
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  dark: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#071015",
   },
 
-  loginContainer: {
+  light: {
     flex: 1,
-    padding: 28,
+    backgroundColor: "#F7F9F8",
+  },
+
+  login: {
+    flexGrow: 1,
+    padding: 24,
     justifyContent: "center",
   },
 
-  loginLogo: {
-    width: 220,
-    height: 90,
-    alignSelf: "center",
+  logo: {
+    width: "100%",
+    height: 120,
     marginBottom: 4,
   },
 
-  logoFallback: {
-    alignItems: "center",
-    marginBottom: 18,
-  },
-
-  logoText: {
-    fontSize: 42,
-    fontWeight: "900",
-    letterSpacing: 5,
-    color: DARK,
-  },
-
-  logoTagline: {
-    fontSize: 10,
-    letterSpacing: 3,
-    color: GREEN,
-    marginTop: 2,
-  },
-
-  welcome: {
-    textAlign: "center",
-    fontSize: 14,
-    color: GREEN,
-    fontWeight: "700",
-    marginBottom: 38,
-  },
-
-  loginTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: TEXT,
-    marginBottom: 8,
-  },
-
-  loginSubtitle: {
-    fontSize: 15,
-    color: MUTED,
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-
-  phoneBox: {
-    height: 58,
-    borderWidth: 1,
-    borderColor: "#DCE4E2",
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    marginBottom: 16,
-  },
-
-  country: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: TEXT,
-    marginRight: 12,
-  },
-
-  phoneInput: {
-    flex: 1,
-    fontSize: 17,
-    color: TEXT,
-  },
-
-  primaryButton: {
-    height: 58,
-    backgroundColor: DARK,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-
-  primaryButtonText: {
+  brandWhite: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: 34,
     fontWeight: "800",
-  },
-
-  terms: {
     textAlign: "center",
-    color: "#8A9594",
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 18,
-  },
-
-  otpContainer: {
-    flex: 1,
-    padding: 28,
-    paddingTop: 24,
-  },
-
-  back: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: DARK,
-    marginBottom: 35,
-  },
-
-  smallLogo: {
-    width: 70,
-    height: 70,
-    borderRadius: 20,
-    backgroundColor: DARK,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 30,
-  },
-
-  smallLogoText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "900",
     letterSpacing: 2,
   },
 
-  otpInput: {
-    height: 65,
-    borderWidth: 1,
-    borderColor: "#DCE4E2",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
+  tagWhite: {
+    color: "#C7D0D3",
+    fontSize: 11,
+    letterSpacing: 2,
     textAlign: "center",
-    fontSize: 27,
-    fontWeight: "800",
-    letterSpacing: 8,
-    color: TEXT,
-    marginBottom: 16,
+    marginTop: 4,
   },
 
-  resend: {
+  helpful: {
+    color: "#7BE36A",
     textAlign: "center",
-    color: GREEN,
-    fontWeight: "800",
-    marginTop: 20,
     fontSize: 15,
+    marginTop: 12,
+    marginBottom: 28,
   },
 
-  homeContent: {
-    padding: 20,
-    paddingBottom: 40,
+  loginTitle: {
+    color: "#FFFFFF",
+    fontSize: 30,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  hello: {
+  loginSub: {
+    color: "#AAB5B9",
+    textAlign: "center",
     fontSize: 14,
-    color: MUTED,
-    marginBottom: 3,
+    lineHeight: 21,
+    marginTop: 10,
+    marginBottom: 24,
   },
 
-  headerTitle: {
-    fontSize: 23,
-    fontWeight: "900",
-    color: TEXT,
+  labelWhite: {
+    color: "#DCE4E6",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 7,
   },
 
-  profileCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: DARK,
+  darkInput: {
+    backgroundColor: "#111C21",
+    borderWidth: 1,
+    borderColor: "#2C3A40",
+    borderRadius: 14,
+    color: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    fontSize: 16,
+    marginBottom: 15,
+  },
+
+  greenButton: {
+    backgroundColor: "#1F6F4A",
+    borderRadius: 15,
+    minHeight: 54,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 7,
   },
 
-  profileIcon: {
-    fontSize: 21,
-  },
-
-  banner: {
-    backgroundColor: DARK,
-    borderRadius: 22,
-    padding: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 27,
-  },
-
-  bannerText: {
-    flex: 1,
-  },
-
-  bannerTitle: {
+  buttonText: {
     color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "900",
-    lineHeight: 26,
+    fontSize: 16,
+    fontWeight: "800",
   },
 
-  bannerSubtitle: {
-    color: GREEN,
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  noteDark: {
+    color: "#718086",
+    textAlign: "center",
     fontSize: 12,
-    fontWeight: "700",
-    marginTop: 8,
+    lineHeight: 18,
+    marginTop: 18,
+  },
+
+  content: {
+    padding: 20,
+    paddingBottom: 45,
+  },
+
+  top: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 22,
+  },
+
+  brand: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#155D42",
     letterSpacing: 1,
   },
 
-  bannerIcon: {
-    fontSize: 35,
-    marginLeft: 12,
+  tag: {
+    fontSize: 9,
+    color: "#64726F",
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
 
-  sectionTitle: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: TEXT,
-    marginBottom: 13,
+  logout: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#E8EFEC",
   },
 
-  serviceGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 22,
+  logoutText: {
+    color: "#155D42",
+    fontWeight: "700",
   },
 
-  serviceCard: {
-    width: "48%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 13,
-    borderWidth: 1,
-    borderColor: "#E7EEEC",
-  },
-
-  serviceIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: "#EFF8F3",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 13,
-  },
-
-  serviceEmoji: {
-    fontSize: 25,
-  },
-
-  serviceTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: TEXT,
-    marginBottom: 4,
-  },
-
-  serviceSubtitle: {
-    fontSize: 11,
-    color: MUTED,
-    lineHeight: 16,
-  },
-
-  careBanner: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E7EEEC",
-    marginBottom: 27,
-  },
-
-  careHeart: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#FFF0F1",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 13,
-  },
-
-  careHeartText: {
-    fontSize: 22,
-  },
-
-  careTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: TEXT,
-  },
-
-  careSubtitle: {
-    fontSize: 11,
-    color: MUTED,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-
-  arrow: {
-    fontSize: 28,
-    color: DARK,
-    marginLeft: 8,
-  },
-
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E7EEEC",
-  },
-
-  emptyIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: TEXT,
-  },
-
-  emptyText: {
-    textAlign: "center",
-    color: MUTED,
-    fontSize: 12,
-    marginTop: 5,
-    lineHeight: 18,
-  },
-
-  bookingContent: {
+  hero: {
+    backgroundColor: "#E4F1EB",
+    borderRadius: 24,
     padding: 22,
-    paddingBottom: 40,
-  },
-
-  bookingIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: DARK,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-
-  bookingEmoji: {
-    fontSize: 34,
-  },
-
-  bookingTitle: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: TEXT,
-  },
-
-  bookingSubtitle: {
-    color: MUTED,
-    fontSize: 14,
-    marginTop: 5,
     marginBottom: 25,
   },
 
-  locationCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 19,
-    borderWidth: 1,
-    borderColor: "#E2EAE8",
-    marginBottom: 27,
-  },
-
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  dotGreen: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: GREEN,
-    marginRight: 15,
-  },
-
-  dotDark: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: DARK,
-    marginRight: 15,
-  },
-
-  locationLine: {
-    height: 27,
-    width: 1,
-    backgroundColor: "#CBD5D2",
-    marginLeft: 5.5,
-  },
-
-  locationLabel: {
-    fontSize: 12,
-    color: MUTED,
-    marginBottom: 3,
-  },
-
-  locationPlaceholder: {
-    fontSize: 15,
+  helpfulGreen: {
+    color: "#2C8A61",
+    fontSize: 13,
     fontWeight: "700",
-    color: TEXT,
+    marginBottom: 8,
   },
 
-  detailCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 19,
-    borderWidth: 1,
-    borderColor: "#E2EAE8",
-    marginBottom: 22,
-  },
-
-  detailText: {
-    fontSize: 14,
-    color: TEXT,
-    fontWeight: "600",
-    marginBottom: 15,
-  },
-});
+ 
