@@ -196,7 +196,7 @@ export default function App() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.otpContainer}>
-          <TouchableOpacity onPress={() => setScreen("login")}>
+          <TouchableOpacity onPress={() => setScreen("onPress={() => setScreen("home")}")}>
             <Text style={styles.back}>‹ Back</Text>
           </TouchableOpacity>
 
@@ -230,7 +230,7 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={sendOTP}>
+          <TouchableOpacity onPress={() => setScreen("home")}
             <Text style={styles.resend}>Resend OTP</Text>
           </TouchableOpacity>
         </View>
