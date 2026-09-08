@@ -6,11 +6,21 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+
+    "icon": "./assets/sera logo black png.png",
+
+    "splash": {
+      "image": "./assets/sera white logo png.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+
     "extra": {
       "eas": {
         "projectId": "9645f742-030c-469b-9250-9724fc1f36ce"
       }
     },
+
     "android": {
       "package": "com.seraindia.mvp",
       "versionCode": 1
